@@ -1102,6 +1102,54 @@
   .dash-alert-text { color: var(--text); }
   .dash-alert-text b { color: var(--navy); }
 
+  /* ── NOTAS ── */
+  .notas-layout { display: grid; grid-template-columns: 220px 1fr; min-height: calc(100vh - 60px); }
+  .notas-sidebar {
+    border-right: 1px solid var(--border);
+    background: var(--bg); padding: 16px 12px;
+  }
+  .notas-content { padding: 24px; display: flex; flex-direction: column; gap: 16px; }
+  .nota-item {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); box-shadow: var(--shadow); overflow: hidden;
+  }
+  .nota-item-hd {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 14px; border-bottom: 1px solid var(--border);
+    background: var(--bg);
+  }
+  .nota-item-date { font-size: 11.5px; font-weight: 700; color: var(--navy); }
+  .nota-item-body {
+    padding: 12px 14px; font-size: 13px; color: var(--text);
+    line-height: 1.7; white-space: pre-wrap; min-height: 40px;
+  }
+  .nota-editor-wrap {
+    border: 1px solid var(--border); border-radius: var(--radius);
+    background: var(--surface); box-shadow: var(--shadow); overflow: hidden;
+  }
+  .nota-editor-hd {
+    padding: 12px 16px; border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--navy);
+  }
+  .nota-editor-title { font-size: 14px; font-weight: 700; color: #fff; }
+  .nota-editor-area {
+    width: 100%; min-height: 140px; padding: 14px 16px;
+    border: none; outline: none; font-family: inherit;
+    font-size: 13px; color: var(--text); background: #fff;
+    resize: vertical; line-height: 1.7;
+    box-sizing: border-box;
+  }
+  .nota-editor-footer {
+    padding: 10px 16px; border-top: 1px solid var(--border);
+    display: flex; gap: 8px; align-items: center; background: var(--bg);
+  }
+  .nota-ver-btn {
+    font-size: 11.5px; color: var(--teal); font-weight: 600;
+    cursor: pointer; background: none; border: none; font-family: inherit;
+    padding: 0; text-decoration: underline;
+  }
+
   /* config page */
   .config-section { margin-bottom: 28px; }
   .config-section h3 { font-size: 14px; font-weight: 700; color: var(--navy); margin-bottom: 12px; }
@@ -1174,6 +1222,9 @@
     </div>
     <div class="nav-item" onclick="showTab('feedbacks')">
       <span class="icon">💬</span><span>Feedbacks & PDI</span>
+    </div>
+    <div class="nav-item" onclick="showTab('notas')">
+      <span class="icon">📝</span><span>Notas por Colaborador</span>
     </div>
     <div class="nav-item" onclick="showTab('conecta')">
       <span class="icon">⭐</span><span>Feedbacks Conecta</span>
@@ -1446,6 +1497,19 @@
     </div>
   </div>
 
+  <!-- ═══ NOTAS POR COLABORADOR ═══ -->
+  <div class="tab-page" id="tab-notas" style="flex:1;flex-direction:column;padding:0">
+    <div class="notas-layout">
+      <div class="notas-sidebar">
+        <div class="panel-title" style="margin-bottom:12px">Colaboradores</div>
+        <div id="notasNavList"></div>
+      </div>
+      <div class="notas-content" id="notasContent">
+        <div class="empty-state"><div class="big">📝</div><p>Selecione um colaborador</p></div>
+      </div>
+    </div>
+  </div>
+
   <!-- ═══ AGENDA DA SEMANA ═══ -->
   <div class="tab-page" id="tab-agenda" style="flex:1;flex-direction:column;padding:0">
     <div class="page-content" style="flex:1" id="agendaContent"></div>
@@ -1664,7 +1728,10 @@
   <div class="modal modal-xl">
     <div class="modal-header">
       <div class="modal-title" id="mFBTitle">Novo Ciclo de Feedback</div>
-      <button class="close-btn" onclick="closeModal('modalFB')">×</button>
+      <div style="display:flex;align-items:center;gap:10px">
+        <button class="nota-ver-btn" id="btnVerNotas" onclick="abrirNotasDoFeedback()" title="Ver notas deste colaborador">📝 Ver notas</button>
+        <button class="close-btn" onclick="closeModal('modalFB')">×</button>
+      </div>
     </div>
     <div class="modal-body">
       <div class="form-grid form-grid-2">
@@ -1862,6 +1929,7 @@ let STATE = {
   feedbacks: [],
   conecta: [],
   cards: [],
+  notas: [],
   scriptUrl: '',
   secretKey: ''
 };
@@ -1964,6 +2032,7 @@ async function syncData() {
     if (data.feedbacks) STATE.feedbacks = data.feedbacks;
     if (data.conecta) STATE.conecta = data.conecta;
     if (data.cards) STATE.cards = data.cards;
+    if (data.notas) STATE.notas = data.notas;
     setSyncStatus('Sincronizado', 'ok');
     renderAll();
     toast('Dados sincronizados!', 'success');
@@ -2024,6 +2093,7 @@ const tabTitles = {
   banco: '⏱️ Banco de Horas',
   homeoffice: '🏠 Home Office & Ausências',
   feedbacks: '💬 Feedbacks & PDI',
+  notas: '📝 Notas por Colaborador',
   conecta: '⭐ Feedbacks Conecta',
   cards: '📋 Cards de Atividades',
   agenda: '📅 Agenda da Semana',
@@ -2036,6 +2106,7 @@ const topActions = {
   banco: 'openModalBH',
   homeoffice: 'openModalHO',
   feedbacks: 'openModalFB',
+  notas: null,
   conecta: 'openModalConecta',
   cards: null,
   agenda: null,
@@ -2063,6 +2134,7 @@ function showTab(tab) {
   if (tab === 'feedbacks') renderFBTabs();
   if (tab === 'conecta') renderConecta();
   if (tab === 'inicio') renderDashboard();
+  if (tab === 'notas') renderNotas();
   if (tab === 'cards') renderCards();
   if (tab === 'agenda') renderAgenda();
 }
@@ -2091,6 +2163,7 @@ function renderAll() {
   if (currentTab === 'cards') renderCards();
   if (currentTab === 'inicio') renderDashboard();
   if (currentTab === 'agenda') renderAgenda();
+  if (currentTab === 'notas') renderNotas();
   renderSidePanel(currentTab);
 }
 
@@ -2822,7 +2895,7 @@ function renderSidePanel(tab) {
   const cw = document.querySelector('.content-wrap');
   if (!cw) return;
 
-  if (['config','feedbacks','conecta','inicio','cards','agenda'].includes(tab)) {
+  if (['config','feedbacks','conecta','inicio','cards','agenda','notas'].includes(tab)) {
     panel.style.display = 'none'; return;
   }
   panel.style.display = '';
@@ -4193,6 +4266,137 @@ function renderAgenda() {
   }
 
   el.innerHTML = html;
+}
+
+// ═══════════════════════════════════════════════
+//  NOTAS POR COLABORADOR
+// ═══════════════════════════════════════════════
+let notasColabAtivo = null;
+
+function renderNotas() {
+  const nav = document.getElementById('notasNavList');
+  if (!nav) return;
+  if (!notasColabAtivo) notasColabAtivo = STATE.colaboradores[0];
+
+  nav.innerHTML = STATE.colaboradores.map((c, i) => {
+    const qty = STATE.notas.filter(n => n.colab === c).length;
+    return `<div class="colab-nav-item ${c === notasColabAtivo ? 'active' : ''}" onclick="selectNotasColab('${c}')">
+      ${avHtml(c, i, 28)}
+      <span class="colab-nav-name">${c}</span>
+      ${qty ? `<span class="colab-nav-count">${qty}</span>` : ''}
+    </div>`;
+  }).join('');
+
+  renderNotasContent(notasColabAtivo);
+}
+
+function selectNotasColab(c) {
+  notasColabAtivo = c;
+  renderNotas();
+}
+
+function renderNotasContent(colab) {
+  const el = document.getElementById('notasContent');
+  if (!el) return;
+  const avIdx = STATE.colaboradores.indexOf(colab);
+  const notas = STATE.notas.filter(n => n.colab === colab).sort((a,b) => b.data > a.data ? 1 : -1);
+
+  el.innerHTML = `
+    <!-- Editor de nova nota -->
+    <div class="nota-editor-wrap">
+      <div class="nota-editor-hd">
+        <div style="display:flex;align-items:center;gap:10px">
+          ${avHtml(colab, avIdx, 32)}
+          <span class="nota-editor-title">Nova anotação — ${colab}</span>
+        </div>
+      </div>
+      <textarea class="nota-editor-area" id="notaEditorText" placeholder="Anote aqui observações, comportamentos, pontos a abordar no próximo feedback...&#10;&#10;Estas notas ficam salvas e você pode consultá-las ao preparar o próximo ciclo de feedback."></textarea>
+      <div class="nota-editor-footer">
+        <button class="btn btn-primary btn-sm" onclick="salvarNota('${colab}')">💾 Salvar anotação</button>
+        <button class="btn btn-ghost btn-sm" onclick="document.getElementById('notaEditorText').value=''">Limpar</button>
+        <span style="margin-left:auto;font-size:11.5px;color:var(--text-3)">${notas.length} anotação(ões) salva(s)</span>
+      </div>
+    </div>
+
+    <!-- Histórico -->
+    ${notas.length === 0
+      ? `<div class="empty-state" style="padding:32px"><div class="big">📋</div><p>Nenhuma anotação ainda para ${colab}.<br>Use o campo acima para registrar observações.</p></div>`
+      : notas.map(n => `
+        <div class="nota-item">
+          <div class="nota-item-hd">
+            <span class="nota-item-date">📅 ${fmtDate(n.data)} ${n.hora ? '· ' + n.hora : ''}</span>
+            <button class="btn btn-danger btn-sm btn-icon" onclick="deletarNota('${n.id}')" title="Excluir">🗑️</button>
+          </div>
+          <div class="nota-item-body">${n.texto.replace(/</g,'&lt;')}</div>
+        </div>`).join('')}
+  `;
+}
+
+async function salvarNota(colab) {
+  const texto = document.getElementById('notaEditorText')?.value.trim();
+  if (!texto) { toast('Digite algo antes de salvar', 'error'); return; }
+
+  const agora = new Date();
+  const nota = {
+    id: genId(),
+    colab,
+    texto,
+    data: agora.toISOString().slice(0, 10),
+    hora: agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  };
+
+  try {
+    await saveRecord('notas', nota);
+    STATE.notas.push(nota);
+    document.getElementById('notaEditorText').value = '';
+    renderNotas();
+    toast('Anotação salva!', 'success');
+  } catch(e) {}
+}
+
+async function deletarNota(id) {
+  if (!confirm('Excluir esta anotação?')) return;
+  try {
+    await deleteRecord('notas', id);
+    STATE.notas = STATE.notas.filter(n => n.id !== id);
+    renderNotas();
+    toast('Anotação excluída');
+  } catch(e) {}
+}
+
+function abrirNotasDoFeedback() {
+  const colab = document.getElementById('mfbColab')?.value || STATE.colaboradores[0];
+  const notas = STATE.notas.filter(n => n.colab === colab).sort((a,b) => b.data > a.data ? 1 : -1);
+
+  if (!notas.length) {
+    toast(`Nenhuma anotação registrada para ${colab.split(' ')[0]}`, '');
+    return;
+  }
+
+  // Abrir painel lateral temporário com as notas
+  const existing = document.getElementById('notasFeedbackPanel');
+  if (existing) { existing.remove(); return; }
+
+  const panel = document.createElement('div');
+  panel.id = 'notasFeedbackPanel';
+  panel.style.cssText = `position:fixed;top:60px;right:0;width:360px;height:calc(100vh - 60px);
+    background:#fff;border-left:2px solid var(--teal);box-shadow:var(--shadow-lg);
+    z-index:250;overflow-y:auto;display:flex;flex-direction:column`;
+
+  panel.innerHTML = `
+    <div style="padding:16px 18px;border-bottom:1px solid var(--border);background:var(--navy);display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:14px;font-weight:700;color:#fff">📝 Notas — ${colab.split(' ')[0]}</div>
+      <button onclick="document.getElementById('notasFeedbackPanel').remove()" style="background:none;border:none;color:rgba(255,255,255,.6);font-size:18px;cursor:pointer">×</button>
+    </div>
+    <div style="padding:16px;flex:1">
+      ${notas.map(n => `
+        <div style="margin-bottom:14px;padding:12px 14px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg)">
+          <div style="font-size:11px;font-weight:700;color:var(--teal);margin-bottom:6px">📅 ${fmtDate(n.data)} ${n.hora ? '· ' + n.hora : ''}</div>
+          <div style="font-size:12.5px;color:var(--text);white-space:pre-wrap;line-height:1.6">${n.texto.replace(/</g,'&lt;')}</div>
+        </div>`).join('')}
+    </div>`;
+
+  document.body.appendChild(panel);
 }
 
 // ═══════════════════════════════════════════════
