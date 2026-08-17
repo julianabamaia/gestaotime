@@ -1487,6 +1487,7 @@
         </div>
 
         <button class="btn btn-ghost btn-sm" onclick="limparFiltrosCards()" title="Limpar todos os filtros">✕ Limpar</button>
+        <button class="btn btn-primary btn-sm" onclick="triggerImportCards()" title="Importar Excel do Trello">⬆️ Importar</button>
         <div style="display:flex;align-items:center;gap:6px;margin-left:4px">
           <span style="font-size:11px;color:var(--text-3)">Agrupar</span>
           <button class="btn btn-ghost btn-sm btn-icon" id="btnAgrupar" onclick="toggleAgrupamento()" title="Agrupar por colaborador">👤</button>
@@ -2108,7 +2109,7 @@ const topActions = {
   feedbacks: 'openModalFB',
   notas: null,
   conecta: 'openModalConecta',
-  cards: null,
+  cards: 'triggerImportCards',
   agenda: null,
   config: null
 };
@@ -3505,15 +3506,14 @@ function renderCards() {
   const importArea = document.getElementById('importArea');
   if (!grid) return;
 
+  // import-area só aparece quando não há cards ainda
+  importArea.style.display = STATE.cards.length ? 'none' : '';
+  toolbar.style.display = STATE.cards.length ? '' : 'none';
+
   if (!STATE.cards.length) {
-    importArea.style.display = '';
-    toolbar.style.display = 'none';
     grid.innerHTML = '';
     return;
   }
-
-  importArea.style.display = 'none';
-  toolbar.style.display = '';
 
   const listasExcluir = ['LINKS UTEIS ICM', 'ATIVIDADES ESCOPO GERAL'];
   const cardsVisiveis = STATE.cards.filter(c => !listasExcluir.includes(c.lista));
