@@ -1372,8 +1372,15 @@
         <div class="card card-body" style="padding:20px">
           <div class="colabs-list" id="colabsList"></div>
           <button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="addColab()">+ Adicionar colaborador</button>
+          <hr class="divider" style="margin:18px 0">
+          <div style="margin-bottom:10px">
+            <div style="font-size:12px;font-weight:700;color:var(--navy);margin-bottom:4px">🔗 Mapeamento nome Trello → Colaborador</div>
+            <div style="font-size:11.5px;color:var(--text-3);margin-bottom:12px">Quando o nome no Trello é diferente do cadastrado (ex: "fernanda.ribeiro" → "Fernanda"), configure aqui para que os cards sejam atribuídos corretamente.</div>
+            <div id="trelloMapList"></div>
+            <button class="btn btn-ghost btn-sm" style="margin-top:8px" onclick="addTrelloMap()">+ Adicionar mapeamento</button>
+          </div>
           <div style="margin-top:14px">
-            <button class="btn btn-primary" onclick="saveColabs()">💾 Salvar colaboradores</button>
+            <button class="btn btn-primary" onclick="saveColabs()">💾 Salvar colaboradores e mapeamentos</button>
           </div>
         </div>
       </div>
@@ -1924,6 +1931,7 @@
 // ═══════════════════════════════════════════════
 let STATE = {
   colaboradores: ['Davi','Juliana','Fernanda','Lucas','Andrezza'],
+  trelloMap: {}, // { 'fernanda.ribeiro': 'Fernanda', ... }
   ferias: [],
   bancoHoras: [],
   homeoffice: [],
@@ -1950,10 +1958,12 @@ function loadConfig() {
     STATE.scriptUrl = c.scriptUrl || '';
     STATE.secretKey = c.secretKey || '';
     STATE.colaboradores = c.colaboradores || STATE.colaboradores;
+    STATE.trelloMap = c.trelloMap || {};
   }
   document.getElementById('cfgScript').value = STATE.scriptUrl;
   document.getElementById('cfgKey').value = STATE.secretKey;
   renderColabsConfig();
+  renderTrelloMapConfig();
 }
 
 function saveConfig() {
@@ -1962,7 +1972,8 @@ function saveConfig() {
   localStorage.setItem('icm_team_config', JSON.stringify({
     scriptUrl: STATE.scriptUrl,
     secretKey: STATE.secretKey,
-    colaboradores: STATE.colaboradores
+    colaboradores: STATE.colaboradores,
+    trelloMap: STATE.trelloMap
   }));
   toast('Configurações salvas!', 'success');
   syncData();
@@ -1971,14 +1982,57 @@ function saveConfig() {
 function saveColabs() {
   const rows = document.querySelectorAll('.colab-row input');
   STATE.colaboradores = [...rows].map(r => r.value.trim()).filter(Boolean);
+  // Salvar mapeamentos Trello também
+  const mapRows = document.querySelectorAll('.trello-map-row');
+  STATE.trelloMap = {};
+  mapRows.forEach(r => {
+    const trelloNome = r.querySelector('.trello-nome').value.trim().toLowerCase();
+    const colabNome = r.querySelector('.trello-colab').value.trim();
+    if (trelloNome && colabNome) STATE.trelloMap[trelloNome] = colabNome;
+  });
   localStorage.setItem('icm_team_config', JSON.stringify({
     scriptUrl: STATE.scriptUrl,
     secretKey: STATE.secretKey,
-    colaboradores: STATE.colaboradores
+    colaboradores: STATE.colaboradores,
+    trelloMap: STATE.trelloMap
   }));
-  toast('Colaboradores salvos!', 'success');
+  toast('Colaboradores e mapeamentos salvos!', 'success');
   repopulateSelects();
   renderAll();
+}
+
+function renderTrelloMapConfig() {
+  const list = document.getElementById('trelloMapList');
+  if (!list) return;
+  list.innerHTML = '';
+  Object.entries(STATE.trelloMap).forEach(([trello, colab]) => {
+    const row = document.createElement('div');
+    row.className = 'trello-map-row';
+    row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
+    row.innerHTML = `
+      <input class="trello-nome" type="text" value="${trello}" placeholder="Nome no Trello (ex: fernanda.ribeiro)" style="flex:1">
+      <span style="color:var(--text-3);font-size:16px">→</span>
+      <select class="trello-colab" style="flex:1">
+        ${STATE.colaboradores.map(c => `<option value="${c}" ${c===colab?'selected':''}>${c}</option>`).join('')}
+      </select>
+      <button class="btn btn-danger btn-sm btn-icon" onclick="this.closest('.trello-map-row').remove()">✕</button>`;
+    list.appendChild(row);
+  });
+}
+
+function addTrelloMap() {
+  const list = document.getElementById('trelloMapList');
+  const row = document.createElement('div');
+  row.className = 'trello-map-row';
+  row.style.cssText = 'display:flex;gap:8px;align-items:center;margin-bottom:8px';
+  row.innerHTML = `
+    <input class="trello-nome" type="text" placeholder="Nome no Trello (ex: fernanda.ribeiro)" style="flex:1">
+    <span style="color:var(--text-3);font-size:16px">→</span>
+    <select class="trello-colab" style="flex:1">
+      ${STATE.colaboradores.map(c => `<option value="${c}">${c}</option>`).join('')}
+    </select>
+    <button class="btn btn-danger btn-sm btn-icon" onclick="this.closest('.trello-map-row').remove()">✕</button>`;
+  list.appendChild(row);
 }
 
 function addColab() {
@@ -3280,6 +3334,25 @@ async function deleteConecta(id) {
 }
 
 // ═══════════════════════════════════════════════
+//  RESOLUÇÃO DE NOMES TRELLO → COLABORADOR
+// ═══════════════════════════════════════════════
+function resolveColab(nomesTrello) {
+  // nomesTrello: array de strings vindas do Trello
+  return nomesTrello.map(r => {
+    const rLow = r.toLowerCase().trim();
+    // 1. Mapeamento explícito (prioridade máxima)
+    if (STATE.trelloMap[rLow]) return STATE.trelloMap[rLow];
+    // 2. Match por primeiro nome (case-insensitive)
+    const primTrello = rLow.split(/[.\s_]/)[0];
+    const match = STATE.colaboradores.find(c => {
+      const primColab = c.toLowerCase().split(' ')[0];
+      return primColab === primTrello || c.toLowerCase().includes(primTrello);
+    });
+    return match || r; // retorna o nome original se não encontrar
+  });
+}
+
+// ═══════════════════════════════════════════════
 //  CARDS — IMPORTAÇÃO EXCEL
 // ═══════════════════════════════════════════════
 function triggerImportCards() {
@@ -3362,7 +3435,8 @@ async function processCardsFile(file) {
       if (!id) return;
 
       const respRaw = g(row, iResp);
-      const responsaveis = respRaw ? respRaw.split(',').map(r => r.trim()).filter(Boolean) : [];
+      const responsaveisRaw = respRaw ? respRaw.split(',').map(r => r.trim()).filter(Boolean) : [];
+      const responsaveis = resolveColab(responsaveisRaw);
 
       const etiquetasRaw = g(row, iEtiq);
       const etiquetas = etiquetasRaw ? etiquetasRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
@@ -3689,7 +3763,9 @@ function renderDashboard() {
   STATE.colaboradores.forEach(c => { cardsPorColab[c] = { ativ: 0, meta: 0, prio: 0, concluido: 0 }; });
   cardsAtivos.forEach(card => {
     card.responsaveis.forEach(r => {
-      const match = STATE.colaboradores.find(c => r.includes(c.split(' ')[0]) || c.includes(r.split(' ')[0]));
+      // resolveColab já fez o mapeamento na importação, mas garantimos aqui também
+      const rResolved = resolveColab([r])[0];
+      const match = STATE.colaboradores.find(c => c === rResolved || rResolved.includes(c.split(' ')[0]) || c.includes(rResolved.split(' ')[0]));
       if (match) {
         if (!cardsPorColab[match]) cardsPorColab[match] = { ativ: 0, meta: 0, prio: 0, concluido: 0 };
         if (card.lista.includes('CONCLU')) { cardsPorColab[match].concluido++; }
@@ -3951,7 +4027,8 @@ function renderCardsAgrupados(data) {
   let html = '';
 
   const renderGrupo = (nome, cards) => {
-    const idx = STATE.colaboradores.findIndex(c => nome.includes(c.split(' ')[0]) || c.includes(nome.split(' ')[0]));
+    const nomeResolved = resolveColab([nome])[0];
+    const idx = STATE.colaboradores.findIndex(c => c === nomeResolved || nomeResolved.includes(c.split(' ')[0]) || c.includes(nomeResolved.split(' ')[0]));
     html += `<div class="cards-group">
       <div class="cards-group-hd" onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display==='none'?'':'none'; this.querySelector('.cards-group-toggle').textContent=this.nextElementSibling.style.display===''?'▼':'▶'">
         ${avHtml(nome.split(' ')[0], idx, 28)}
